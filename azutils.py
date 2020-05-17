@@ -606,11 +606,12 @@ def get_all_resource_groups():
     return rg_list
 
 ##############################################################################################################
-def get_all_vms(rg_name):
+def get_all_vms(rg_name, instance_view=False):
     """Gets all virtual machines in a specified resource group.
 
     Args:
         rg_name: The name of the resource group.
+        instance_view: Include instance view (default False)
 
     Returns:
         A list contains found ResourceGroup instances.
@@ -618,7 +619,11 @@ def get_all_vms(rg_name):
     iter = ccli.virtual_machines.list(rg_name)
     vm_list = []
     for vm in iter:
-        vm_list.append(vm)
+        if instance_view:
+            vm = get_vm(rg_name, vm.name, instance_view)
+            vm_list.append(vm)
+        else:
+            vm_list.append(vm)
     return vm_list
 
 ##############################################################################################################
@@ -638,7 +643,7 @@ def get_disk(rg_name, disk_name):
       CloudError: If resource group doesn't exist.
     """
     try:
-        disk = ccli.disks.get(rg_name, disk_name).wait()
+        disk = ccli.disks.get(rg_name, disk_name)
     except CloudError as ex:
         if ex.error.error == 'ResourceNotFound':
             disk = None
@@ -675,28 +680,28 @@ def get_nic(rg_name, nic_name):
     return nic
 
 ##############################################################################################################
-def get_nsg(ng_name, nsg_name):
-   """Gets the specified network security group.
+def get_nsg(rg_name, nsg_name):
+    """Gets the specified network security group.
 
-   Args:
-     rg_name: The name of the resource group.
-     nsg_name: The name of the network security group.
+    Args:
+        rg_name: The name of the resource group.
+        nsg_name: The name of the network security group.
 
-   Returns:
-     A NetworkSecurityGroup instance if it exists else None.
+    Returns:
+        A NetworkSecurityGroup instance if it exists else None.
 
-   Raises:
-     CloudError: If the resource group doesn't exist.
-   """
-   try:
-       nsg = ncli.network_security_groups.get(rg_name, nsg_name)
-   except CloudError as ex:
-       if ex.error.error == 'ResourceNotFound':
-           nsg = None
-       else:
-           raise
+    Raises:
+        CloudError: If the resource group doesn't exist.
+    """
+    try:
+        nsg = ncli.network_security_groups.get(rg_name, nsg_name)
+    except CloudError as ex:
+        if ex.error.error == 'ResourceNotFound':
+            nsg = None
+        else:
+            raise
 
-   return nsg
+    return nsg
 
 ##############################################################################################################
 def get_public_ip(rg_name, ip_name):
@@ -712,6 +717,16 @@ def get_public_ip(rg_name, ip_name):
     Raises:
       CloudError: If the resource group doesn't exist.
     """
+    try:
+        ip = ncli.public_ip_addresses.get(rg_name, ip_name)
+    except CloudError as ex:
+        if ex.error.error == 'ResourceNotFound':
+            ip = None
+        else:
+            raise
+
+    return ip
+
 ##############################################################################################################
 def get_resource_group(rg_name):
     """Get an Azure Resource Group.
@@ -756,12 +771,13 @@ def get_subnet(rg_name, vnet_name, subnet_name):
     return subnet
 
 ##############################################################################################################
-def get_vm(rg_name, vm_name):
+def get_vm(rg_name, vm_name, instance_view=False):
     """Retrieves a virtual machine.
 
     Args:
       rg_name: The name of the resource group.
       vm_name: The name of the virtual machine.
+      instance_view: Include instance view (default False)
 
     Returns:
       A VirtualMachine instance if it exists else None.
@@ -769,8 +785,9 @@ def get_vm(rg_name, vm_name):
     Raises:
       CloudError: If it cannot create a resource group.
     """
+    expand = 'instanceView' if instance_view else None
     try:
-        vm = ccli.virtual_machines.get(rg_name, vm_name)
+        vm = ccli.virtual_machines.get(rg_name, vm_name, expand=expand)
     except CloudError as ex:
         if ex.error.error == 'ResourceNotFound':
             vm = None

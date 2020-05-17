@@ -3,7 +3,42 @@
 import azutils as az
 
 ##############################################################################################################
-def standardrize_nsg(rules):
+def show_vm(vm):
+    status = vm.instance_view.statuses[1].display_status.split(' ')[-1]
+    print(f'Name: {vm.name} ({status})')
+    print(f'    Size: {vm.hardware_profile.vm_size}')
+    print(f'    Location: {vm.location}')
+    print(f'    OS: {vm.storage_profile.image_reference.offer} {vm.storage_profile.image_reference.sku}')
+    print(f'        Username: {vm.os_profile.admin_username}')
+    print(f'        Password Authentication: {vm.os_profile.linux_configuration.disable_password_authentication}')
+    print( '    Data Disks:')
+    for data_disk in vm.storage_profile.data_disks:
+        disk = az.get_disk(args.rg, data_disk.name)
+        print(f'        Name: {disk.name}')
+        print(f'        Size: {disk.disk_size_gb}GB')
+        print('       ', '-'*22)
+    print( '    NICs:')
+    for network_interface in vm.network_profile.network_interfaces:
+        nic_name = network_interface.id.split('/')[-1]
+        nic = az.get_nic(args.rg, nic_name)
+        print(f'        Name: {nic.name}')
+        print(f'        MAC: {nic.mac_address}')
+        for ipcfg in nic.ip_configurations:
+            print(f'        Private IP: {ipcfg.private_ip_address}')
+            ip_name = ipcfg.public_ip_address.id.split('/')[-1]
+            ip = az.get_public_ip(args.rg, ip_name)
+            print(f'        Public IP: {ip.ip_address} ({ip.public_ip_allocation_method})')
+            print(f'        FQDN: {ip.dns_settings.fqdn}')
+        print(f'        Enable Accelerated Networking: {nic.enable_accelerated_networking}')
+        nsg_name = nic.network_security_group.id.split('/')[-1]
+        nsg = az.get_nsg(args.rg, nsg_name)
+        print(f'        Network Security Group: {nsg.name}')
+        for rule in nsg.security_rules:
+            print(f'            {rule.priority}:{rule.access}:{rule.direction}:{rule.protocol}:{rule.destination_port_range}:{rule.name}')
+        print('       ', '-'*22)
+
+##############################################################################################################
+def standardize_rules(rules):
     def standardrize(rule):
         parts = 'ACCESS:DIR:PROTO:PORT_RANGE:NAME'.split(':')
         rule_parts = rule.split(':')
@@ -57,7 +92,7 @@ def standardrize_nsg(rules):
 def create(args):
     # Validate arguments
     if args.nsg:
-        args.nsg = standardrize_nsg(args.nsg)
+        args.nsg = standardize_rules(args.nsg)
     if args.pubkey:
         pubkeys = []
         for filepath in args.pubkey:
@@ -145,27 +180,19 @@ def info(args):
             print(f'  {rg_dict["name"]}, {rg_dict["location"]}, {rg_dict["properties"]["provisioning_state"]}')
 
     elif args.vm is None:
-        vm_list = az.get_all_vms(args.rg)
+        vm_list = az.get_all_vms(args.rg, instance_view=True)
         for vm in vm_list:
-            nics = [nic.id.split('/')[-1] for nic in vm.network_profile.network_interfaces]
             print('='*30)
-            print(f'Name: {vm.name}')
-            print(f'Status: {az.get_vm_status(args.rg, vm.name)}')}
-            print(f'Location: {vm.location}')
-            print(f'VM SizeL {vm.hardware_profile.vm_size}')
+            show_vm(vm)
 
-            nic_names = [nic.id.split('/')[-1] for nic in vm.network_profile.network_interfaces]
-            print(f'NIC Count: {len(nic_names)}')
-            nics = [az.get_nic(args.rg, nic_name) for nic_name in nic_names]
-            for nic in nics:
-                print(' '*3, '-'*26)
-                print(f'    Name: {nic.name}')
-                print(f'    Location: {nic.location}')
-                for ipcfg in nic.ip_configurations:
-                    print(f'Private IP: {ipcfg.private_ip_address}')
-                    print(f'Public IP:  {ipcfg.public_ip_address.ip_address}') # Possible None since vm is deallocated.
-                    
-                    
+    else:
+        for vm_name in args.vm:
+            print('='*30)
+            vm = az.get_vm(args.rg, vm_name, instance_view=True)
+            if vm is None:
+                print(f'Cannot find virtual machine "{vm_name}" or resource group "{args.rg}".')
+            else:
+                show_vm(vm)
 
 ##############################################################################################################
 def main(args):
