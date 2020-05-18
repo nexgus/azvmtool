@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import azutils as az
 import os.path
+import re
 
 ##############################################################################################################
 def show_vm(vm, show_detail=False):
@@ -101,22 +102,6 @@ def standardize_rules(rules):
 
 ##############################################################################################################
 def create(args):
-    # Validate arguments
-    if args.nsg:
-        args.nsg = standardize_rules(args.nsg)
-    if args.pubkey:
-        pubkeys = []
-        for filepath in args.pubkey:
-            filepath = os.path.expanduser(filepath)
-            with open(filepath, 'r') as fp:
-                pubkey = fp.read()
-                if not pubkey.startswith('ssh-rsa '):
-                    raise ValueError(f'{filepath} is not an RSA public key file.')
-            pubkeys.append(pubkey.strip())
-        args.pubkey = pubkeys
-    if args.disk is None:
-        args.disk = []
-
     # Resource group
     rg_name = args.rg
     rg = az.get_resource_group(rg_name)
@@ -170,7 +155,8 @@ def create(args):
         if args.update or public_ip is None:
             create_or_update = 'Creating' if public_ip is None else 'Updating'
             print(f'{create_or_update} public IP address {rg_name}/{ip_name}...', end='', flush=True)
-            dns_label = f'{args.dns_prefix}{n+1}' # dns_label must conform to the following regular expression: ^[a-z][a-z0-9-]{1,61}[a-z0-9]$.
+            # dns_label must conform to the following regular expression: ^[a-z][a-z0-9-]{1,61}[a-z0-9]$.
+            dns_label = f'{args.dns_prefix}{n+1}'
             public_ip = az.create_or_update_public_ip(rg_name, ip_name, dns_label, args.location)
             print(' \033[92mdone\033[0m.')
         else:
@@ -321,6 +307,27 @@ def info(args):
 
 ##############################################################################################################
 def main(args):
+    # Validate arguments for create
+    if args.nsg:
+        args.nsg = standardize_rules(args.nsg)
+    if args.pubkey:
+        pubkeys = []
+        for filepath in args.pubkey:
+            filepath = os.path.expanduser(filepath)
+            with open(filepath, 'r') as fp:
+                pubkey = fp.read()
+                if not pubkey.startswith('ssh-rsa '):
+                    raise ValueError(f'{filepath} is not an RSA public key file.')
+            pubkeys.append(pubkey.strip())
+        args.pubkey = pubkeys
+    if args.dns_label:
+        if re.match('^[a-z][a-z0-9-]{1,61}[a-z0-9]$', args.dns_label) is None:
+            raise ValueError('--dns-label must match regex "^[a-z][a-z0-9-]{1,61}[a-z0-9]$"')
+    if args.disk is None:
+        args.disk = []
+    else:
+        args.disk = [args.disk]
+
     print('Initial Azure...', end='', flush=True)
     az.init(args.credentials)
     print(' \033[92mdone\033[0m.')
@@ -350,67 +357,130 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
         description='Tool for Azure virtual machine management.',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument('-c', '--credentials', 
                         type=str, default='./credentials', 
                         help='Path to credential file.')
     parser.add_argument('--version', action='version',
-                        version='0.6.0')
+                        version='0.6.3')
 
     subparsers = parser.add_subparsers(
         title='Available commands',
         description='Operation be executed.',
         dest='command',
-        help=f'Description',
+        help='Description',
     )
-    cmd_create     = subparsers.add_parser('create',     aliases=['generate'],     help='Create VM(s) in a resource group.')
-    cmd_delete     = subparsers.add_parser('delete',     aliases=['del', 'rm', 'remove'], help='Delete VM(s) or resource group if --vm is not set.')
-    cmd_start      = subparsers.add_parser('start',      aliases=['run'],          help='Start VM(s) if exist(s).')
-    cmd_deallocate = subparsers.add_parser('deallocate', aliases=['stop'],         help='Deallocate VM(s). If --vm is not set, '
-                                                                                        'deallocate all VMs in the resource group.')
-    cmd_info       = subparsers.add_parser('info',       aliases=['show', 'disp', 'display'], help='Display information. If there is not any option be set, '
-                                                                                                   'list all resource groups.')
+    cmd_create = subparsers.add_parser('create',
+        aliases=['generate'],
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        help='Create VM(s) in a resource group.')
+    cmd_delete = subparsers.add_parser('delete',
+        aliases=['del', 'rm', 'remove'], 
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        help='Delete VM(s) or resource group if --vm is not set.')
+    cmd_start = subparsers.add_parser('start', 
+        aliases=['run'],
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        help='Start VM(s) if exist(s).')
+    cmd_deallocate = subparsers.add_parser('deallocate', 
+        aliases=['stop'], 
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        help='Deallocate VM(s). If --vm is not set, deallocate all VMs in the resource group.')
+    cmd_info = subparsers.add_parser('info',
+        aliases=['show', 'disp', 'display'], 
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        help='Display information. If there is not any option be set, list all resource groups.')
 
     #-----------------------------------------------------------------------------------------------
-    cmd_create.add_argument(      'rg',           type=str,                   help='Resource group.')
-    cmd_create.add_argument('-v', '--vm-prefix',  type=str, default='server', help='VM name prefix.')
-    cmd_create.add_argument('-q', '--quantity',   type=int, default=1,        help='VM quantity.')
-    cmd_create.add_argument('-s', '--size',       type=str, default=az.DEFAULT_VM_SIZE, help='VM size (VM model name). For detail please check Azure portal.')
-    cmd_create.add_argument(      '--vnet-prefix',   type=str, default='10.0.0.0/16', help = 'The address prefix of the virtual network interface.')
-    cmd_create.add_argument(      '--subnet-prefix', type=str, default='10.0.0.0/24', help = 'The address prefix of the subnet in the virtual network interface.')
-    cmd_create.add_argument('-g', '--nsg',        type=str, nargs='+',        help='Network Security Group in ACCESS:DIR:PROTO:PORT_RANGE:NAME format. '
-                                                                                   'ACCESS could be "Allow" or "Deny"; DIR could be "Inbond" or "Outbound"; '
-                                                                                   'PROTO could be "Tcp", "Udp", "Icmp", "Esp", "*", or "Ah"; '
-                                                                                   'PORT_RANGE could be 0-65535 or "*"; NAME must be unique. '
-                                                                                   'The highest priority must present first.')
-    cmd_create.add_argument('-d', '--dns-prefix', type=str, required=True,    help='Domain name label prefix.')
-    cmd_create.add_argument('-u', '--username',   type=str, required=True,    help='VM login username.')
-    cmd_create.add_argument('-p', '--password',   type=str, default=az.DEFAULT_PASSWORD, help='VM login password.')
-    cmd_create.add_argument('-k', '--pubkey',     type=str, nargs='+',        help='Path to SSH public key(s). This disable password authentication.')
-    cmd_create.add_argument(      '--disk',       type=int, nargs='+',        help='Size of created/attached storage(s) size in GB. '
-                                                                                   'The first one in this list should be /dev/sdc.')
-    cmd_create.add_argument('-l', '--location',   type=str, default=az.DEFAULT_LOCATION, help='Location.')
-    cmd_create.add_argument(      '--update',     action='store_true',        help='Update resources if they are exist.')
+    cmd_create.add_argument('rg',
+        type=str,
+        help='Resource group.')
+    cmd_create.add_argument('-v', '--vm-prefix',
+        type=str, default='server', 
+        help='VM name prefix.')
+    cmd_create.add_argument('-q', '--quantity',
+        type=int, default=1,
+        help='VM quantity.')
+    cmd_create.add_argument('-s', '--size',
+        type=str, default=az.DEFAULT_VM_SIZE, 
+        help='VM size (VM model name). For detail please check Azure portal.')
+    cmd_create.add_argument('--vnet-prefix',
+        type=str, default='10.0.0.0/16', 
+        help='The address prefix of the virtual network interface.')
+    cmd_create.add_argument('--subnet-prefix', 
+        type=str, default='10.0.0.0/24', 
+        help='The address prefix of the subnet in the virtual network interface.')
+    cmd_create.add_argument('-g', '--nsg',
+        type=str, nargs='+',
+        help='Network Security Group in ACCESS:DIR:PROTO:PORT_RANGE:NAME format. '
+             'ACCESS could be "Allow" or "Deny"; DIR could be "Inbond" or "Outbound"; '
+             'PROTO could be "Tcp", "Udp", "Icmp", "Esp", "*", or "Ah"; '
+             'PORT_RANGE could be 0-65535 or "*"; NAME must be unique. '
+             'The highest priority must present first.')
+    cmd_create.add_argument('-d', '--dns-prefix', 
+        type=str, required=True, 
+        help='Domain name label prefix.')
+    cmd_create.add_argument('-u', '--username', 
+        type=str, required=True, 
+        help='VM login username.')
+    cmd_create.add_argument('-p', '--password', 
+        type=str, default=az.DEFAULT_PASSWORD, 
+        help='VM login password.')
+    cmd_create.add_argument('-k', '--pubkey', 
+        type=str, nargs='+', 
+        help='Path to SSH public key(s). This disable password authentication.')
+    cmd_create.add_argument('--disk', 
+        type=int,
+        help='Size of created/attached storage(s) size in GB.')
+    cmd_create.add_argument('-l', '--location', 
+        type=str, default=az.DEFAULT_LOCATION, 
+        help='Location.')
+    cmd_create.add_argument('--update', action='store_true', 
+        help='Update resources if they are exist.')
 
     #-----------------------------------------------------------------------------------------------
-    cmd_start.add_argument(      'rg',   type=str,            help='Resource group.')
-    cmd_start.add_argument('-v', '--vm', type=str, nargs='+', help='VM name. If not set, all VMs and their resources in this resource group will be deleted.')
+    cmd_start.add_argument(      'rg', 
+        type=str, 
+        help='Resource group.')
+    cmd_start.add_argument('-v', '--vm', 
+        type=str, nargs='+', 
+        help='VM name. If not set, all VMs and their resources in this resource group '
+             'will be deleted.')
 
     #-----------------------------------------------------------------------------------------------
-    cmd_delete.add_argument(      'rg',   type=str,            help='Resource group.')
-    cmd_delete.add_argument('-v', '--vm', type=str, nargs='+', help='VM name. If not set, all VMs and their resources in this resource group will be deleted.')
-    cmd_delete.add_argument(      '--keep-nic', action='store_true', help='Keep associated virtual network interface(s).')
-    cmd_delete.add_argument(      '--keep-hdd', action='store_true', help='Keep associated data disk(s).')
+    cmd_delete.add_argument('rg', 
+        type=str, 
+        help='Resource group.')
+    cmd_delete.add_argument('-v', '--vm', 
+        type=str, nargs='+', 
+        help='VM name. If not set, all VMs and their resources in this resource group '
+             'will be deleted.')
+    cmd_delete.add_argument('--keep-nic', 
+        action='store_true', 
+        help='Keep associated virtual network interface(s).')
+    cmd_delete.add_argument('--keep-hdd', 
+        action='store_true', 
+        help='Keep associated data disk(s).')
 
     #-----------------------------------------------------------------------------------------------
-    cmd_deallocate.add_argument(      'rg',   type=str,            help='Resource group.')
-    cmd_deallocate.add_argument('-v', '--vm', type=str, nargs='+', help='VM name. If not set, all VMs in this resource group will be deallocated.')
+    cmd_deallocate.add_argument('rg',
+        type=str, 
+        help='Resource group.')
+    cmd_deallocate.add_argument('-v', '--vm', 
+        type=str, nargs='+', 
+        help='VM name. If not set, all VMs in this resource group will be deallocated.')
 
     #-----------------------------------------------------------------------------------------------
-    cmd_info.add_argument(      'rg',       type=str, nargs='?', help='Resource group.')
-    cmd_info.add_argument('-v', '--vm',     type=str, nargs='+', help='VM name. If not set, all VMs in this resource group will be deallocated.')
-    cmd_info.add_argument('-d', '--detail', action='store_true', help='Show detail info.')
+    cmd_info.add_argument('rg', 
+        type=str, nargs='?', 
+        help='Resource group.')
+    cmd_info.add_argument('-v', '--vm', 
+        type=str, nargs='+', 
+        help='VM name. If not set, all VMs in this resource group will be deallocated.')
+    cmd_info.add_argument('-d', '--detail', 
+        action='store_true', 
+        help='Show detail info.')
 
     #-----------------------------------------------------------------------------------------------
     args = parser.parse_args()
