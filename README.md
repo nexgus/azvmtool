@@ -1,4 +1,4 @@
-# Azure Virtual Machine Deployment Tool
+# A Simple Tool to Manage Azure Virtual Machine
 
 ## Getting Started
 1.  Clone this repository
@@ -10,7 +10,7 @@
     ```bash
     $ pip install -r requirements.txt
     ```
-1.  [¨Ï¥Î Azure ¤J¤fºô¯¸¨Ó«Ø¥ß¥i¦s¨ú¸ê·½ªº Azure AD À³¥Îµ{¦¡©MªA°È¥DÅé](https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal)  
+1.  [ä½¿ç”¨ Azure å…¥å£ç¶²ç«™ä¾†å»ºç«‹å¯å­˜å–è³‡æºçš„ Azure AD æ‡‰ç”¨ç¨‹å¼å’Œæœå‹™ä¸»é«”](https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal)  
     [Use the Azure portal to create an Azure AD application and service principal that can access resources](https://docs.microsoft.com/zh-tw/azure/active-directory/develop/howto-create-service-principal-portal)  
     Save your subscription ID, application (client) ID, and directory (tenant) ID in a file `./credentials` in json format. For example:
     ```
