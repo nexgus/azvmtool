@@ -97,7 +97,7 @@ def create_or_update_disk(rg_name, disk_name, disk_size=1024, location=DEFAULT_L
     """
     return ccli.disks.create_or_update(
         rg_name,
-        storage_name,
+        disk_name,
         {
             'location': location,
             'disk_size_gb': disk_size,
@@ -116,7 +116,7 @@ def create_or_update_disk(rg_name, disk_name, disk_size=1024, location=DEFAULT_L
 
 ##############################################################################################################
 def create_or_update_nic(rg_name, nic_name, subnet_id, nsg_id, public_ip=None, location=DEFAULT_LOCATION):
-    """Create an Azure network interface.
+    """Create an network interface.
 
     Args:
       rg_name: Resource group name.
@@ -169,7 +169,7 @@ def create_or_update_nsg(rg_name, nsg_name, rules=None, location=DEFAULT_LOCATIO
     Returns:
       A NetworkSecurityGroup instance.
     """
-    def update_or_create():
+    def update_or_create(rules):
         """A local function to create and return a NetworkSecurityGroup instance."""
         if rules is None: rules = []
         rules = ['Allow:Inbound:Tcp:22:SSH'] + rules # We always open SSH port
@@ -177,10 +177,11 @@ def create_or_update_nsg(rg_name, nsg_name, rules=None, location=DEFAULT_LOCATIO
             'Inbound': 300,
             'Outbond': 300,
         }
+        security_rules = []
         for rule in rules:
             direction = rule.split(':')[1]
             rule = f'{priority[direction]}:{rule}'
-            security_rules.append(security_rule(rule))
+            security_rules.append(create_security_rule(rule))
             priority[direction] += 10
 
         params = NetworkSecurityGroup(
@@ -199,14 +200,14 @@ def create_or_update_nsg(rg_name, nsg_name, rules=None, location=DEFAULT_LOCATIO
 
     except CloudError as ex:
         if ex.error.error == 'ResourceNotFound':
-            nsg = update_or_create()
+            nsg = update_or_create(rules)
         else:
             raise
 
     else:
         if force:
             delete_nsg(rg_name, nsg_name)
-        nsg = update_or_create()
+        nsg = update_or_create(rules)
 
     return nsg
 
@@ -271,7 +272,7 @@ def create_or_update_subnet(rg_name, vnet_name, subnet_name, prefix='10.0.0.0/24
     params = {
         'address_prefix': prefix,
     }
-    return cli.subnets.create_or_update(
+    return ncli.subnets.create_or_update(
         resource_group_name=rg_name,
         virtual_network_name=vnet_name,
         subnet_name=subnet_name,
@@ -358,7 +359,7 @@ def create_or_update_vm(rg_name, vm_name, nic_id, username, password=DEFAULT_PAS
         params['os_profile']['linux_configuration'] = linux_configuration
     #print(f'\n{params}'
 
-    return cli.virtual_machines.create_or_update(
+    return ccli.virtual_machines.create_or_update(
         resource_group_name=rg_name, 
         vm_name=vm_name, 
         parameters=params,
@@ -384,7 +385,7 @@ def create_or_update_vnet(rg_name, vnet_name, prefix='10.0.0.0/16', location=DEF
         }
     }
 
-    return cli.virtual_networks.create_or_update(
+    return ncli.virtual_networks.create_or_update(
         resource_group_name=rg_name,
         virtual_network_name=vnet_name,
         parameters=params
@@ -424,6 +425,30 @@ def create_security_rule(rule):
     )
 
     return security_rule
+
+##############################################################################################################
+def deallocate_vm(rg_name, vm_name, blocking=True):
+    """Shuts down the virtual machine and releases the compute resources. You are not billed for the compute 
+    resources that this virtual machine uses.
+
+    Args:
+        rg_name: The name of resource group.
+        vm_name: The name of virtual machine.
+
+    Raises:
+        CloudError: If the resource group doesn't exist.
+    """
+    try:
+        operation = ccli.virtual_machines.deallocate(rg_name, vm_name)
+        if blocking:
+            operation.wait()
+        else:
+            return operation
+    except CloudError as ex:
+        if ex.error.error == 'ResourceNotFound':
+            pass
+        else:
+            raise
 
 ##############################################################################################################
 def delete_disk(rg_name, disk_name):
@@ -653,7 +678,7 @@ def get_disk(rg_name, disk_name):
 
 ##############################################################################################################
 def get_nic(rg_name, nic_name):
-    """Get an Azure network interface.
+    """Get a network interface.
 
     Args:
       rg_name: Resource group name.
@@ -761,7 +786,7 @@ def get_subnet(rg_name, vnet_name, subnet_name):
       CloudError: If it cannot create a resource group.
     """
     try:
-        subnet = cli.subnets.get(rg_name, vnet_name, subnet_name).wait()
+        subnet = ncli.subnets.get(rg_name, vnet_name, subnet_name)
     except CloudError as ex:
         if ex.error.error == 'NotFound':
             subnet = None
@@ -797,11 +822,51 @@ def get_vm(rg_name, vm_name, instance_view=False):
     return vm
 
 ##############################################################################################################
+def get_vm_disks(rg_name, vm_name):
+    """Get all data disks of a virtual machine.
+
+    Args:
+      rg_name: The name of a resource group.
+      vm_name: The name of a virtual machine.
+
+    Returns:
+      A List of Disk instance.
+
+    Raises:
+      CloudError: If the resource group or virtual machine doesn't exist.
+    """
+    vm = ccli.virtual_machines.get(rg_name, vm_name)
+    disk_names = [disk.name for disk in vm.storage_profile.data_disks]
+    return disk_names
+
+##############################################################################################################
+def get_vm_nics(rg_name, vm_name):
+    """Get all network interfaces of a virtual machine.
+
+    Args:
+      rg_name: The name of a resource group.
+      vm_name: The name of a virtual machine.
+
+    Returns:
+      A List of NetworkInterface instance.
+
+    Raises:
+      CloudError: If the resource group or virtual machine doesn't exist.
+    """
+    vm = ccli.virtual_machines.get(rg_name, vm_name)
+    nics = []
+    for network_interface in vm.network_profile.network_interfaces:
+        nic_name = network_interface.id.split('/')[-1]
+        nics.append(nic_name)
+    return nics
+
+##############################################################################################################
 def get_vm_status(rg_name, vm_name):
-    return ccli.virtual_machines.get(
+    status = ccli.virtual_machines.get(
         rg_name, vm_name, 
         expand='instanceView'
     ).instance_view.statuses[1].display_status
+    return status.split(' ')[-1]
 
 ##############################################################################################################
 def get_vnet(rg_name, vnet_name):
@@ -818,7 +883,7 @@ def get_vnet(rg_name, vnet_name):
         CloudError: If it cannot create a resource group.
     """
     try:
-        vnet = cli.virtual_networks.get(rg_name, vnet_name)
+        vnet = ncli.virtual_networks.get(rg_name, vnet_name)
     except CloudError as ex:
         if ex.error.error == 'ResourceNotFound':
             vnet = None
@@ -826,3 +891,28 @@ def get_vnet(rg_name, vnet_name):
             raise
 
     return vnet
+
+##############################################################################################################
+def start_vm(rg_name, vm_name, blocking=True):
+    """The operation to start a virtual machine.
+
+    Args:
+        rg_name: The name of resource group.
+        vm_name: The name of virtual machine.
+
+    Raises:
+        CloudError: If the resource group doesn't exist.
+    """
+    status = get_vm_status(rg_name, vm_name)
+    func = ccli.virtual_machines.restart if status=='running' else ccli.virtual_machines.start
+    try:
+        operation = func(rg_name, vm_name)
+        if blocking:
+            operation.wait()
+        else:
+            return operation
+    except CloudError as ex:
+        if ex.error.error == 'ResourceNotFound':
+            pass
+        else:
+            raise
