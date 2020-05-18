@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import json
 import os.path
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.mgmt.compute import ComputeManagementClient
@@ -23,7 +24,7 @@ from msrestazure.azure_exceptions import CloudError
 ##############################################################################################################
 DEFAULT_LOCATION = 'westus2'
 DEFAULT_PASSWORD = '1qaz@WSX#EDC4rfv'
-DEFAULT_VM_SIZE  = 'Standard_DS1_v2'
+DEFAULT_VM_SIZE  = 'Standard_D2s_v3'
 
 rcli = None # ResourceGroupClient
 ncli = None # NetworkClient
@@ -254,7 +255,7 @@ def create_or_update_resource_group(rg_name, location=DEFAULT_LOCATION):
     return rcli.resource_groups.create_or_update(
         resource_group_name=rg_name,
         parameters={'location': location},
-    ).result()
+    )
 
 ##############################################################################################################
 def create_or_update_subnet(rg_name, vnet_name, subnet_name, prefix='10.0.0.0/24'):
@@ -342,8 +343,6 @@ def create_or_update_vm(rg_name, vm_name, nic_id, username, password=DEFAULT_PAS
 
     if ssh_keys:
         # https://github.com/Azure/azure-sdk-for-python/issues/745
-        # We need to remove params['os_profile']['admin_password'] even though we set
-        # params['os_profile']['linux_configuration']['disable_password_authentication'] as True
         del params['os_profile']['admin_password']
         linux_configuration = {
             'disable_password_authentication': True,
@@ -357,7 +356,8 @@ def create_or_update_vm(rg_name, vm_name, nic_id, username, password=DEFAULT_PAS
                 'key_data': ssh_key
             })
         params['os_profile']['linux_configuration'] = linux_configuration
-    #print(f'\n{params}'
+
+    print(); print(json.dumps(params, indent=4))
 
     return ccli.virtual_machines.create_or_update(
         resource_group_name=rg_name, 

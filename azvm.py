@@ -114,6 +114,8 @@ def create(args):
                     raise ValueError(f'{filepath} is not an RSA public key file.')
             pubkeys.append(pubkey.strip())
         args.pubkey = pubkeys
+    if args.disk is None:
+        args.disk = []
 
     # Resource group
     rg_name = args.rg
@@ -122,7 +124,7 @@ def create(args):
         create_or_update = 'Creating' if rg is None else 'Updating'
         print(f'{create_or_update} resource group {rg_name}...', end='', flush=True)
         rg = az.create_or_update_resource_group(rg_name, args.location)
-        print(' done')
+        print(' \033[92mdone\033[0m.')
     else:
         print(f'Using existed resource group {rg_name}')
 
@@ -133,7 +135,7 @@ def create(args):
         create_or_update = 'Creating' if vnet is None else 'Updating'
         print(f'{create_or_update} virtual network {rg_name}/{vnet_name}...', end='', flush=True)
         vnet = az.create_or_update_vnet(rg_name, vnet_name, args.vnet_prefix, args.location)
-        print(' done')
+        print(' \033[92mdone\033[0m.')
     else:
         print(f'Using existed virtual network {rg_name}/{vnet_name}')
 
@@ -144,7 +146,7 @@ def create(args):
         create_or_update = 'Creating' if subnet is None else 'Updating'
         print(f'{create_or_update} subnet {rg_name}/{vnet_name}/{subnet_name}...', end='', flush=True)
         subnet = az.create_or_update_subnet(rg_name, vnet_name, subnet_name, args.subnet_prefix)
-        print(' done')
+        print(' \033[92mdone\033[0m.')
     else:
         print(f'Using existed subnet {rg_name}/{vnet_name}/{subnet_name}')
 
@@ -155,7 +157,7 @@ def create(args):
         create_or_update = 'Creating' if nsg is None else 'Updating'
         print(f'{create_or_update} network security group {rg_name}/{nsg_name}...', end='', flush=True)
         nsg = az.create_or_update_nsg(rg_name, nsg_name, args.nsg, args.location)
-        print(' done')
+        print(' \033[92mdone\033[0m.')
     else:
         print(f'Using existed network security group {rg_name}/{nsg_name}')
 
@@ -170,7 +172,7 @@ def create(args):
             print(f'{create_or_update} public IP address {rg_name}/{ip_name}...', end='', flush=True)
             dns_label = f'{args.dns_prefix}{n+1}' # dns_label must conform to the following regular expression: ^[a-z][a-z0-9-]{1,61}[a-z0-9]$.
             public_ip = az.create_or_update_public_ip(rg_name, ip_name, dns_label, args.location)
-            print(' done')
+            print(' \033[92mdone\033[0m.')
         else:
             print(f'Using existed public IP address {rg_name}/{ip_name}')
 
@@ -181,7 +183,7 @@ def create(args):
             create_or_update = 'Creating' if nic is None else 'Updating'
             print(f'{create_or_update} network interface {rg_name}/{nic_name}...', end='', flush=True)
             nic = az.create_or_update_nic(rg_name, nic_name, subnet.id, nsg.id, public_ip, args.location)
-            print(' done')
+            print(' \033[92mdone\033[0m.')
         else:
             print(f'Using existed network interface {rg_name}/{nic_name}')
 
@@ -192,14 +194,14 @@ def create(args):
             if args.update:
                 print(f'Deleting existed data disk {rg_name}/{disk_name}...', end='', flush=True)
                 az.delete_disk(rg_name, disk_name)
-                print(' done')
+                print(' \033[92mdone\033[0m.')
 
             disk = az.get_disk(rg_name, disk_name)
 
             if disk is None:
                 print(f'Creating data disk {rg_name}/{disk_name}...', end='', flush=True)
                 disk = az.create_or_update_disk(rg_name, disk_name, int(size), args.location)
-                print(' done')
+                print(' \033[92mdone\033[0m.')
             else:
                 print(f'Using existed data disk {rg_name}/{disk_name}')
 
@@ -221,13 +223,13 @@ def create(args):
                 vm_size=args.size, 
                 location=args.location
             )
-            print(' done')
+            print(' \033[92mdone\033[0m.')
         else:
             print(f'Using existed virtual machine {rg_name}/{vm_name}')
 
         print(f'Starting virtual machine {rg_name}/{vm_name}...', end='', flush=True)
         az.start_vm(rg_name, vm_name)
-        print(' done')
+        print(' \033[92mdone\033[0m.')
 
 ##############################################################################################################
 def start(args):
@@ -239,7 +241,7 @@ def start(args):
         vm_name = vm if isinstance(vm, str) else vm.name
         print(f'Starting virtual machine {args.rg}/{vm_name}...', end='', flush=True)
         az.start_vm(args.rg, vm_name)
-        print(' done')
+        print(' \033[92mdone\033[0m.')
 
 ##############################################################################################################
 def deallocate(args):
@@ -251,7 +253,7 @@ def deallocate(args):
         vm_name = vm if isinstance(vm, str) else vm.name
         print(f'Deallocating virtual machine {args.rg}/{vm_name}...', end='', flush=True)
         az.deallocate_vm(args.rg, vm_name)
-        print(' done')
+        print(' \033[92mdone\033[0m.')
 
 ##############################################################################################################
 def delete(args):
@@ -261,7 +263,7 @@ def delete(args):
     if args.vm is None:
         print(f'Deleting resource group {args.rg}...', end='', flush=True)
         az.delete_resource_group(args.rg)
-        print(' done')
+        print(' \033[92mdone\033[0m.')
 
     else:
         vm_list = args.vm
@@ -269,7 +271,7 @@ def delete(args):
             if az.get_vm_status(args.rg, vm_name) != 'deallocated':
                 print(f'Deallocating virtual machine {args.rg}/{vm_name}...', end='', flush=True)
                 az.deallocate_vm(args.rg, vm_name)
-                print(' done')
+                print(' \033[92mdone\033[0m.')
 
             # Let's get all associated resources if we don't want to keep them
             nic_names, hdd_names = [], []
@@ -280,26 +282,27 @@ def delete(args):
 
             print(f'Deleting virtual machine {args.rg}/{vm_name}...', end='', flush=True)
             az.delete_vm(args.rg, vm_name)
-            print(' done')
+            print(' \033[92mdone\033[0m.')
 
             # Since VM has been deleted, the associated resources can be delete without dissociate.
             for nic_name in nic_names:
                 print(f'Deleting network interface {args.rg}/{vm_name}/{nic_name}...', end='', flush=True)
                 az.delete_nic(args.rg, nic_name)
-                print(' done')
+                print(' \033[92mdone\033[0m.')
             for hdd_name in hdd_names:
                 print(f'Deleting data disk {args.rg}/{vm_name}/{hdd_name}...', end='', flush=True)
                 az.delete_disk(args.rg, hdd_name)
-                print(' done')
+                print(' \033[92mdone\033[0m.')
 
 ##############################################################################################################
 def info(args):
     if args.rg is None and args.vm is None:
         rg_list = az.get_all_resource_groups()
-        print(f'Count: {len(rg_list)}')
         for rg in rg_list:
             rg_dict = rg.as_dict()
-            print(f'  {rg_dict["name"]}, {rg_dict["location"]}, {rg_dict["properties"]["provisioning_state"]}')
+            print('='*30)
+            print(f'Name: {rg.name}')
+            print(f'Location: {rg.location}')
 
     elif args.vm is None:
         vm_list = az.get_all_vms(args.rg, instance_view=True)
@@ -320,7 +323,7 @@ def info(args):
 def main(args):
     print('Initial Azure...', end='', flush=True)
     az.init(args.credentials)
-    print(' done')
+    print(' \033[92mdone\033[0m.')
 
     functions = {
         'create': create,
@@ -405,8 +408,8 @@ if __name__ == '__main__':
     cmd_deallocate.add_argument('-v', '--vm', type=str, nargs='+', help='VM name. If not set, all VMs in this resource group will be deallocated.')
 
     #-----------------------------------------------------------------------------------------------
-    cmd_info.add_argument(      '--rg', type=str,            help='Resource group.')
-    cmd_info.add_argument('-v', '--vm', type=str, nargs='+', help='VM name. If not set, all VMs in this resource group will be deallocated.')
+    cmd_info.add_argument(      'rg',       type=str, nargs='?', help='Resource group.')
+    cmd_info.add_argument('-v', '--vm',     type=str, nargs='+', help='VM name. If not set, all VMs in this resource group will be deallocated.')
     cmd_info.add_argument('-d', '--detail', action='store_true', help='Show detail info.')
 
     #-----------------------------------------------------------------------------------------------
