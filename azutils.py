@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import json
 import os.path
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.mgmt.compute import ComputeManagementClient
@@ -356,8 +355,6 @@ def create_or_update_vm(rg_name, vm_name, nic_id, username, password=DEFAULT_PAS
                 'key_data': ssh_key
             })
         params['os_profile']['linux_configuration'] = linux_configuration
-
-    print(); print(json.dumps(params, indent=4))
 
     return ccli.virtual_machines.create_or_update(
         resource_group_name=rg_name, 
