@@ -321,9 +321,9 @@ def main(args):
                         raise ValueError(f'{filepath} is not an RSA public key file.')
                 pubkeys.append(pubkey.strip())
             args.pubkey = pubkeys
-        if args.dns_label:
-            if re.match('^[a-z][a-z0-9-]{1,61}[a-z0-9]$', args.dns_label) is None:
-                raise ValueError('--dns-label must match regex "^[a-z][a-z0-9-]{1,61}[a-z0-9]$"')
+        if args.dns_prefix:
+            if re.match('^[a-z][a-z0-9-]{1,61}[a-z0-9]$', args.dns_prefix) is None:
+                raise ValueError('--dns-prefix must match regex "^[a-z][a-z0-9-]{1,61}[a-z0-9]$"')
         if args.disk is None:
             args.disk = []
         else:
