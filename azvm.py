@@ -307,26 +307,27 @@ def info(args):
 
 ##############################################################################################################
 def main(args):
-    # Validate arguments for create
-    if args.nsg:
-        args.nsg = standardize_rules(args.nsg)
-    if args.pubkey:
-        pubkeys = []
-        for filepath in args.pubkey:
-            filepath = os.path.expanduser(filepath)
-            with open(filepath, 'r') as fp:
-                pubkey = fp.read()
-                if not pubkey.startswith('ssh-rsa '):
-                    raise ValueError(f'{filepath} is not an RSA public key file.')
-            pubkeys.append(pubkey.strip())
-        args.pubkey = pubkeys
-    if args.dns_label:
-        if re.match('^[a-z][a-z0-9-]{1,61}[a-z0-9]$', args.dns_label) is None:
-            raise ValueError('--dns-label must match regex "^[a-z][a-z0-9-]{1,61}[a-z0-9]$"')
-    if args.disk is None:
-        args.disk = []
-    else:
-        args.disk = [args.disk]
+    if args.command == 'create':
+        # Validate arguments for create
+        if args.nsg:
+            args.nsg = standardize_rules(args.nsg)
+        if args.pubkey:
+            pubkeys = []
+            for filepath in args.pubkey:
+                filepath = os.path.expanduser(filepath)
+                with open(filepath, 'r') as fp:
+                    pubkey = fp.read()
+                    if not pubkey.startswith('ssh-rsa '):
+                        raise ValueError(f'{filepath} is not an RSA public key file.')
+                pubkeys.append(pubkey.strip())
+            args.pubkey = pubkeys
+        if args.dns_label:
+            if re.match('^[a-z][a-z0-9-]{1,61}[a-z0-9]$', args.dns_label) is None:
+                raise ValueError('--dns-label must match regex "^[a-z][a-z0-9-]{1,61}[a-z0-9]$"')
+        if args.disk is None:
+            args.disk = []
+        else:
+            args.disk = [args.disk]
 
     print('Initial Azure...', end='', flush=True)
     az.init(args.credentials)
@@ -363,7 +364,7 @@ if __name__ == '__main__':
                         type=str, default='./credentials', 
                         help='Path to credential file.')
     parser.add_argument('--version', action='version',
-                        version='0.6.3')
+                        version='0.6.4')
 
     subparsers = parser.add_subparsers(
         title='Available commands',
